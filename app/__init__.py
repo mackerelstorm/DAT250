@@ -30,9 +30,9 @@ def init_db():
         db.commit()
 
 # perform generic query, not very secure yet
-def query_db(query, one=False):
+def query_db(sql, query, one=False):
     db = get_db()
-    cursor = db.execute(query)
+    cursor = db.execute(sql, query)
     rv = cursor.fetchall()
     cursor.close()
     db.commit()
