@@ -1,5 +1,5 @@
-from flask import render_template, flash, redirect, url_for, request
-from app import app, query_db
+from flask import render_template, flash, redirect, url_for, request, abort
+from app import app, User, database
 from app.forms import IndexForm, PostForm, FriendsForm, ProfileForm, CommentsForm
 from datetime import datetime
 import os
@@ -9,6 +9,19 @@ import os
 # this file contains all the different routes, and the logic for communicating with the database
 
 #Funksjon for å sjekke om filnavnet inneholder korrekte extensions fra configs ALLOWED_EXTENSIONS
+import flask_login
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from werkzeug.security import generate_password_hash, check_password_hash
+# this file contains all the different routes, and the logic for communicating with the database
+
+limiter = Limiter(
+    app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://",
+)
+
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
@@ -16,88 +29,111 @@ def allowed_file(filename):
 # home page/login/registration
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/index', methods=['GET', 'POST'])
+@limiter.limit('10/minute')
 def index():
     form = IndexForm()
 
     if form.login.is_submitted() and form.login.submit.data:
-        user = query_db('SELECT * FROM Users WHERE username="{}";'.format(form.login.username.data), one=True)
+        user = database.query_user(form.login.username.data)
         if user == None:
             flash('Wrong password or username')          #Istedenfor å kunne sjekke om brukeren allerede finnes
-        elif user['password'] == form.login.password.data:
-            return redirect(url_for('stream', username=form.login.username.data))
+        elif check_password_hash(user['password'], form.login.password.data):
+            f_user = User()
+            f_user.id = user['id']
+            flask_login.login_user(f_user)
+            return redirect(url_for('stream'))
         else:
             flash('Wrong password or username!')
-
     #elif form.register.is_submitted() and form.register.submit.data:
     elif form.register.validate_on_submit():
         if form.register.username_check(form.register.username.data):
             if form.register.pwdcheck(form.register.password.data):
-                query_db('INSERT INTO Users (username, first_name, last_name, password) VALUES("{}", "{}", "{}", "{}");'.format(form.register.username.data, form.register.first_name.data,
-                form.register.last_name.data, form.register.password.data))
+                database.submit_user(form.register.username.data, form.register.first_name.data,
+                 form.register.last_name.data, generate_password_hash(form.register.password.data))
                 return redirect(url_for('index'))
             elif not form.register.pwdcheck(form.register.password.data):
                 flash("Password must contain an uppercase letter and a number!")
         elif not form.register.username_check(form.register.username.data):
             flash("Username already taken!")
+        return redirect(url_for('index'))
 
     return render_template('index.html', title='Welcome', form=form)
 
 
 # content stream page
-@app.route('/stream/<username>', methods=['GET', 'POST'])
-def stream(username):
+@app.route('/stream', methods=['GET', 'POST'])
+@flask_login.login_required
+def stream():
     form = PostForm()
-    user = query_db('SELECT * FROM Users WHERE username="{}";'.format(username), one=True)
+    user_id = flask_login.current_user.id
+    user = database.query_user_id(user_id)
     if form.is_submitted() and allowed_file(form.image.data.filename): #Sjekker korrekt filtype
         if form.image.data:
             path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
             form.image.data.save(path)
 
 
-        query_db('INSERT INTO Posts (u_id, content, image, creation_time) VALUES({}, "{}", "{}", \'{}\');'.format(user['id'], form.content.data, form.image.data.filename, datetime.now()))
-        return redirect(url_for('stream', username=username))
+        database.submit_post(user['id'], form.content.data, form.image.data.filename, datetime.now())
+        return redirect(url_for('stream'))
     elif form.is_submitted() and not allowed_file(form.image.data.filename): #Gir beskjed dersom fila ikke er av riktig type
         flash("You can only upload images!")
+    posts = database.query_posts(user['id'])
+    return render_template('stream.html', title='Stream', username=user['username'], form=form, posts=posts)
     
-    posts = query_db('SELECT p.*, u.*, (SELECT COUNT(*) FROM Comments WHERE p_id=p.id) AS cc FROM Posts AS p JOIN Users AS u ON u.id=p.u_id WHERE p.u_id IN (SELECT u_id FROM Friends WHERE f_id={0}) OR p.u_id IN (SELECT f_id FROM Friends WHERE u_id={0}) OR p.u_id={0} ORDER BY p.creation_time DESC;'.format(user['id']))
-    return render_template('stream.html', title='Stream', username=username, form=form, posts=posts)
 
 # comment page for a given post and user.
 @app.route('/comments/<username>/<int:p_id>', methods=['GET', 'POST'])
+@flask_login.login_required
 def comments(username, p_id):
     form = CommentsForm()
+    user_id = flask_login.current_user.id
+    user = database.query_user_id(user_id)
+    if username != user['username']: # brukes til å nekte brukeren i å endre url 
+        return abort(403)
     if form.is_submitted():
-        user = query_db('SELECT * FROM Users WHERE username="{}";'.format(username), one=True)
-        query_db('INSERT INTO Comments (p_id, u_id, comment, creation_time) VALUES({}, {}, "{}", \'{}\');'.format(p_id, user['id'], form.comment.data, datetime.now()))
-
-    post = query_db('SELECT * FROM Posts WHERE id={};'.format(p_id), one=True)
-    all_comments = query_db('SELECT DISTINCT * FROM Comments AS c JOIN Users AS u ON c.u_id=u.id WHERE c.p_id={} ORDER BY c.creation_time DESC;'.format(p_id))
+        database.submit_comment(p_id, user_id, form.comment.data, datetime.now())
+    post = database.query_post(p_id)
+    all_comments = database.query_comments(p_id)
     return render_template('comments.html', title='Comments', username=username, form=form, post=post, comments=all_comments)
 
 # page for seeing and adding friends
 @app.route('/friends/<username>', methods=['GET', 'POST'])
+@flask_login.login_required
 def friends(username):
     form = FriendsForm()
-    user = query_db('SELECT * FROM Users WHERE username="{}";'.format(username), one=True)
+    user_id = flask_login.current_user.id
+    user = database.query_user_id(user_id)
+    if username != user['username']: 
+        return abort(403)
     if form.is_submitted():
-        friend = query_db('SELECT * FROM Users WHERE username="{}";'.format(form.username.data), one=True)
+        friend = database.query_user(form.username.data)
         if friend is None:
             flash('User does not exist')
         else:
-            query_db('INSERT INTO Friends (u_id, f_id) VALUES({}, {});'.format(user['id'], friend['id']))
-    
-    all_friends = query_db('SELECT * FROM Friends AS f JOIN Users as u ON f.f_id=u.id WHERE f.u_id={} AND f.f_id!={} ;'.format(user['id'], user['id']))
+            database.submit_friend(user['id'], friend['id'])
+    all_friends = database.query_friends(user['id'])
     return render_template('friends.html', title='Friends', username=username, friends=all_friends, form=form)
 
 # see and edit detailed profile information of a user
 @app.route('/profile/<username>', methods=['GET', 'POST'])
+@flask_login.login_required
 def profile(username):
+    user_id = flask_login.current_user.id
+    user = database.query_user_id(user_id)
+    friend = database.query_friend(user_id, username)
     form = ProfileForm()
-    if form.is_submitted():
-        query_db('UPDATE Users SET education="{}", employment="{}", music="{}", movie="{}", nationality="{}", birthday=\'{}\' WHERE username="{}" ;'.format(
-            form.education.data, form.employment.data, form.music.data, form.movie.data, form.nationality.data, form.birthday.data, username
-        ))
-        return redirect(url_for('profile', username=username))
-    
-    user = query_db('SELECT * FROM Users WHERE username="{}";'.format(username), one=True)
-    return render_template('profile.html', title='profile', username=username, user=user, form=form)
+    if friend and username == friend['username'] : # brukes til å nekte brukeren i å se andre sine sider 
+        user = database.query_user(friend['username'])
+        return render_template('profile.html', title='profile', username=username, user=user, form=form)
+    elif username == user['username']:
+        if form.is_submitted():
+            database.update_profile(form.education.data, form.employment.data, form.music.data, form.movie.data, form.nationality.data, form.birthday.data, username)
+            return redirect(url_for('profile', username=username))
+        return render_template('profile.html', title='profile', username=username, user=user, form=form)
+    else:
+        abort(403)
+
+@app.route('/logout', methods=['GET', 'POST'])
+def logout():
+    flask_login.logout_user()
+    return redirect(url_for('index'))

@@ -1,10 +1,10 @@
 from flask_wtf import FlaskForm
 from flask import session
-from wtforms import StringField, PasswordField, BooleanField, SubmitField, FormField, TextAreaField, FileField, Form
-from wtforms.fields.html5 import DateField
-from wtforms.validators import InputRequired, EqualTo, ValidationError, Length, Regexp #Importert funksjoner for validering
-from flask_wtf.file import FileField, FileAllowed, FileRequired
-from app import query_db
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, FormField, TextAreaField, FileField
+from wtforms.validators import InputRequired, EqualTo, Length #Importert funksjoner for validering
+from flask_wtf.file import FileField  
+from app import database
+from wtforms.fields import DateField
 
 # defines all forms in the application, these will be instantiated by the template,
 # and the routes.py will read the values of the fields
@@ -32,7 +32,7 @@ class RegisterForm(FlaskForm):
 
 
     def username_check(self, username):
-        bruker = query_db('SELECT * FROM Users WHERE username="{}";'.format(username), one=True)
+        bruker = database.query_user(username)
         if bruker == None:
             return True
         else:
