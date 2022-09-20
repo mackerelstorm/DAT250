@@ -1,17 +1,33 @@
 from flask import Flask, g
 from config import Config
 from flask_bootstrap import Bootstrap
-#from flask_login import LoginManager
+import flask_login
+from flask_login  import LoginManager
 import sqlite3
 import os
 
 # create and configure app
 app = Flask(__name__)
+app.secret_key = 'secret'
 Bootstrap(app)
 app.config.from_object(Config)
 
 # TODO: Handle login management better, maybe with flask_login?
-#login = LoginManager(app)
+login = LoginManager(app)
+login.init_app(app)
+
+class User(flask_login.UserMixin):
+    pass
+
+@login.user_loader 
+def load(user_id):
+    thisuser = query_db('SELECT * FROM Users WHERE id="{}";'.format(user_id,), one=True)
+    if thisuser != None:
+        user = User()
+        user.id = user_id
+        return user
+    return "oopsie"
+    
 
 # get an instance of the db
 def get_db():
@@ -30,9 +46,9 @@ def init_db():
         db.commit()
 
 # perform generic query, not very secure yet
-def query_db(sql, query, one=False):
+def query_db(query, one=False):
     db = get_db()
-    cursor = db.execute(sql, query)
+    cursor = db.execute(query)
     rv = cursor.fetchall()
     cursor.close()
     db.commit()
