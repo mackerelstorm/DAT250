@@ -3,6 +3,7 @@ from app import app, database
 from app.forms import IndexForm, PostForm, FriendsForm, ProfileForm, CommentsForm
 from datetime import datetime
 import os
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # this file contains all the different routes, and the logic for communicating with the database
 
@@ -16,14 +17,14 @@ def index():
         user = database.query_user(form.login.username.data)
         if user == None:
             flash('Sorry, this user does not exist!')
-        elif user['password'] == form.login.password.data:
+        elif check_password_hash(user['password'], form.login.password.data):
             return redirect(url_for('stream', username=form.login.username.data))
         else:
             flash('Sorry, wrong password!')
 
     elif form.register.is_submitted() and form.register.submit.data:
         database.submit_user(form.register.username.data, form.register.first_name.data,
-         form.register.last_name.data, form.register.password.data)
+         form.register.last_name.data, generate_password_hash(form.register.password.data))
         return redirect(url_for('index'))
     return render_template('index.html', title='Welcome', form=form)
 
