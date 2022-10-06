@@ -1,8 +1,7 @@
 from flask import Flask, g
 from config import Config
 from flask_bootstrap import Bootstrap
-import flask_login
-from flask_login  import LoginManager
+from flask_login  import LoginManager, UserMixin
 import sqlite3
 import os
 
@@ -15,7 +14,7 @@ app.config.from_object(Config)
 login = LoginManager(app)
 login.init_app(app)
 
-class User(flask_login.UserMixin):
+class User(UserMixin):
     pass
 
 @login.user_loader 
@@ -137,6 +136,7 @@ class Database():
         cur.close()
         db.commit()
     
+database = Database()
 
 
 # automatically called when application is closed, and closes db connection
@@ -153,4 +153,4 @@ if not os.path.exists(app.config['DATABASE']):
 if not os.path.exists(app.config['UPLOAD_PATH']):
     os.mkdir(app.config['UPLOAD_PATH'])
 
-database = Database()
+from app import routes

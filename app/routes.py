@@ -1,5 +1,5 @@
 from flask import render_template, flash, redirect, url_for, request, abort
-from app import app, query_db, User, database
+from app import app, User, database
 from app.forms import IndexForm, PostForm, FriendsForm, ProfileForm, CommentsForm
 from datetime import datetime
 import os
@@ -13,6 +13,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 @app.route('/index', methods=['GET', 'POST'])
 def index():
     form = IndexForm()
+
     if form.login.is_submitted() and form.login.submit.data:
         user = database.query_user(form.login.username.data)
         if user == None:
@@ -25,7 +26,6 @@ def index():
         else:
             flash('Sorry, wrong password!')
         
-
     elif form.register.is_submitted() and form.register.submit.data:
         database.submit_user(form.register.username.data, form.register.first_name.data,
          form.register.last_name.data, generate_password_hash(form.register.password.data))
@@ -56,7 +56,7 @@ def stream():
 def comments(username, p_id):
     form = CommentsForm()
     user_id = flask_login.current_user.id
-    user = query_db('SELECT * FROM Users WHERE id="{}";'.format(user_id), one=True)
+    user = database.query_user(user_id)
     if username != user['username']: # brukes til å nekte brukeren i å endre url 
         return abort(403)
     if form.is_submitted():
@@ -89,7 +89,7 @@ def friends(username):
 @flask_login.login_required
 def profile(username):
     user_id = flask_login.current_user.id
-    user = query_db('SELECT * FROM Users WHERE id="{}";'.format(user_id), one=True)
+    user = database.query_user(user_id)
     if username != user['username']: # brukes til å nekte brukeren i å se andre sine sider 
         return abort(403)
     #   return redirect(url_for('profile', username=user['username']))  # sender bruker til riktig side
