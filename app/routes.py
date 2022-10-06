@@ -1,8 +1,9 @@
-from flask import render_template, flash, redirect, url_for, request
-from app import app, database
+from flask import render_template, flash, redirect, url_for, request, abort
+from app import app, query_db, User, database
 from app.forms import IndexForm, PostForm, FriendsForm, ProfileForm, CommentsForm
 from datetime import datetime
 import os
+import flask_login
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # this file contains all the different routes, and the logic for communicating with the database
@@ -12,15 +13,18 @@ from werkzeug.security import generate_password_hash, check_password_hash
 @app.route('/index', methods=['GET', 'POST'])
 def index():
     form = IndexForm()
-
     if form.login.is_submitted() and form.login.submit.data:
         user = database.query_user(form.login.username.data)
         if user == None:
             flash('Sorry, this user does not exist!')
         elif check_password_hash(user['password'], form.login.password.data):
-            return redirect(url_for('stream', username=form.login.username.data))
+            f_user = User()
+            f_user.id = user['id']
+            flask_login.login_user(f_user)
+            return redirect(url_for('stream'))
         else:
             flash('Sorry, wrong password!')
+        
 
     elif form.register.is_submitted() and form.register.submit.data:
         database.submit_user(form.register.username.data, form.register.first_name.data,
@@ -30,57 +34,74 @@ def index():
 
 
 # content stream page
-@app.route('/stream/<username>', methods=['GET', 'POST'])
-def stream(username):
+@app.route('/stream', methods=['GET', 'POST'])
+@flask_login.login_required
+def stream():
     form = PostForm()
-    user = database.query_user(username)
+    user_id = flask_login.current_user.id
+    user = database.query_user(user_id)
     if form.is_submitted():
         if form.image.data:
             path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
             form.image.data.save(path)
 
         database.submit_post(user['id'], form.content.data, form.image.data.filename, datetime.now())
-        return redirect(url_for('stream', username=username))
-
+        return redirect(url_for('stream'))
     posts = database.query_posts(user['id'])
-    return render_template('stream.html', title='Stream', username=username, form=form, posts=posts)
+    return render_template('stream.html', title='Stream', username=user['username'], form=form, posts=posts)
 
 # comment page for a given post and user.
 @app.route('/comments/<username>/<int:p_id>', methods=['GET', 'POST'])
+@flask_login.login_required
 def comments(username, p_id):
     form = CommentsForm()
+    user_id = flask_login.current_user.id
+    user = query_db('SELECT * FROM Users WHERE id="{}";'.format(user_id), one=True)
+    if username != user['username']: # brukes til å nekte brukeren i å endre url 
+        return abort(403)
     if form.is_submitted():
         user = database.query_user(username)
         database.submit_comment(p_id, user['id'], form.comment.data, datetime.now())
-
     post = database.query_post(p_id)
     all_comments = database.query_comments(p_id)
     return render_template('comments.html', title='Comments', username=username, form=form, post=post, comments=all_comments)
 
 # page for seeing and adding friends
 @app.route('/friends/<username>', methods=['GET', 'POST'])
+@flask_login.login_required
 def friends(username):
     form = FriendsForm()
+    user_id = flask_login.current_user.id
     user = database.query_user(username)
+    if username != user['username']: 
+        return abort(403)
     if form.is_submitted():
         friend = database.query_user(form.username.data)
         if friend is None:
             flash('User does not exist')
         else:
             database.submit_friend(user['id'], friend['id'])
-    
     all_friends = database.query_friends(user['id'])
     return render_template('friends.html', title='Friends', username=username, friends=all_friends, form=form)
 
 # see and edit detailed profile information of a user
 @app.route('/profile/<username>', methods=['GET', 'POST'])
+@flask_login.login_required
 def profile(username):
+    user_id = flask_login.current_user.id
+    user = query_db('SELECT * FROM Users WHERE id="{}";'.format(user_id), one=True)
+    if username != user['username']: # brukes til å nekte brukeren i å se andre sine sider 
+        return abort(403)
+    #   return redirect(url_for('profile', username=user['username']))  # sender bruker til riktig side
     form = ProfileForm()
     if form.is_submitted():
-        database.update_profile(
-            form.education.data, form.employment.data, form.music.data, form.movie.data, form.nationality.data, form.birthday.data, username
-        )
+        database.update_profile(form.education.data, form.employment.data, form.music.data, form.movie.data, form.nationality.data, form.birthday.data, username)
         return redirect(url_for('profile', username=username))
     
     user = database.query_user(username)
     return render_template('profile.html', title='profile', username=username, user=user, form=form)
+
+@app.route('/logout', methods=['GET', 'POST'])
+def logout():
+    flask_login.logout_user()
+    return redirect(url_for('index'))
