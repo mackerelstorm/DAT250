@@ -1,9 +1,11 @@
 from flask import render_template, flash, redirect, url_for, request, abort
-from app import app, User, database
+from app import app, User 
 from app.forms import IndexForm, PostForm, FriendsForm, ProfileForm, CommentsForm
 from datetime import datetime
 import os
-
+from app.database import query_user, query_friend, query_friends, query_comments, \
+    query_post, query_posts, query_user_id, query_user_id, submit_user, submit_post, \
+    submit_comment, submit_friend, update_profile
 
 
 # this file contains all the different routes, and the logic for communicating with the database
@@ -34,7 +36,7 @@ def index():
     form = IndexForm()
 
     if form.login.is_submitted() and form.login.submit.data:
-        user = database.query_user(form.login.username.data)
+        user = query_user(form.login.username.data)
         if user == None:
             flash('Wrong password or username')          #Istedenfor å kunne sjekke om brukeren allerede finnes
         elif check_password_hash(user['password'], form.login.password.data):
@@ -47,7 +49,7 @@ def index():
     elif form.register.validate_on_submit():
         if form.register.username_check(form.register.username.data):
             if form.register.pwdcheck(form.register.password.data):
-                database.submit_user(form.register.username.data, form.register.first_name.data,
+                submit_user(form.register.username.data, form.register.first_name.data,
                  form.register.last_name.data, generate_password_hash(form.register.password.data))
                 return redirect(url_for('index'))
             elif not form.register.pwdcheck(form.register.password.data):
@@ -65,18 +67,18 @@ def index():
 def stream():
     form = PostForm()
     user_id = flask_login.current_user.id
-    user = database.query_user_id(user_id)
+    user = query_user_id(user_id)
     if form.is_submitted() and allowed_file(form.image.data.filename): #Sjekker korrekt filtype
         if form.image.data:
             path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
             form.image.data.save(path)
 
 
-        database.submit_post(user['id'], form.content.data, form.image.data.filename, datetime.now())
+        submit_post(user['id'], form.content.data, form.image.data.filename, datetime.now())
         return redirect(url_for('stream'))
     elif form.is_submitted() and not allowed_file(form.image.data.filename): #Gir beskjed dersom fila ikke er av riktig type
         flash("You can only upload images!")
-    posts = database.query_posts(user['id'])
+    posts = query_posts(user['id'])
     return render_template('stream.html', title='Stream', username=user['username'], form=form, posts=posts)
     
 
@@ -86,13 +88,13 @@ def stream():
 def comments(username, p_id):
     form = CommentsForm()
     user_id = flask_login.current_user.id
-    user = database.query_user_id(user_id)
+    user = query_user_id(user_id)
     if username != user['username']: # brukes til å nekte brukeren i å endre url 
         return abort(403)
     if form.is_submitted():
-        database.submit_comment(p_id, user_id, form.comment.data, datetime.now())
-    post = database.query_post(p_id)
-    all_comments = database.query_comments(p_id)
+        submit_comment(p_id, user_id, form.comment.data, datetime.now())
+    post = query_post(p_id)
+    all_comments = query_comments(p_id)
     return render_template('comments.html', title='Comments', username=username, form=form, post=post, comments=all_comments)
 
 # page for seeing and adding friends
@@ -101,16 +103,16 @@ def comments(username, p_id):
 def friends(username):
     form = FriendsForm()
     user_id = flask_login.current_user.id
-    user = database.query_user_id(user_id)
+    user = query_user_id(user_id)
     if username != user['username']: 
         return abort(403)
     if form.is_submitted():
-        friend = database.query_user(form.username.data)
+        friend = query_user(form.username.data)
         if friend is None:
             flash('User does not exist')
         else:
-            database.submit_friend(user['id'], friend['id'])
-    all_friends = database.query_friends(user['id'])
+            submit_friend(user['id'], friend['id'])
+    all_friends = query_friends(user['id'])
     return render_template('friends.html', title='Friends', username=username, friends=all_friends, form=form)
 
 # see and edit detailed profile information of a user
@@ -118,15 +120,15 @@ def friends(username):
 @flask_login.login_required
 def profile(username):
     user_id = flask_login.current_user.id
-    user = database.query_user_id(user_id)
-    friend = database.query_friend(user_id, username)
+    user = query_user_id(user_id)
+    friend = query_friend(user_id, username)
     form = ProfileForm()
     if friend and username == friend['username'] : # brukes til å nekte brukeren i å se andre sine sider 
-        user = database.query_user(friend['username'])
+        user = query_user(friend['username'])
         return render_template('profile.html', title='profile', username=username, user=user, form=form)
     elif username == user['username']:
         if form.is_submitted():
-            database.update_profile(form.education.data, form.employment.data, form.music.data, form.movie.data, form.nationality.data, form.birthday.data, username)
+            update_profile(form.education.data, form.employment.data, form.music.data, form.movie.data, form.nationality.data, form.birthday.data, username)
             return redirect(url_for('profile', username=username))
         return render_template('profile.html', title='profile', username=username, user=user, form=form)
     else:

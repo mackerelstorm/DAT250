@@ -8,8 +8,6 @@ from wtforms.fields import DateField
 
 # defines all forms in the application, these will be instantiated by the template,
 # and the routes.py will read the values of the fields
-# TODO: Add validation, maybe use wtforms.validators??
-# TODO: There was some important security feature that wtforms provides, but I don't remember what; implement it
 
 
 class LoginForm(FlaskForm):
