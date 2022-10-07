@@ -3,6 +3,12 @@ from app import app, User, database
 from app.forms import IndexForm, PostForm, FriendsForm, ProfileForm, CommentsForm
 from datetime import datetime
 import os
+
+
+
+# this file contains all the different routes, and the logic for communicating with the database
+
+#Funksjon for å sjekke om filnavnet inneholder korrekte extensions fra configs ALLOWED_EXTENSIONS
 import flask_login
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -16,6 +22,10 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
 # home page/login/registration
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/index', methods=['GET', 'POST'])
@@ -26,19 +36,27 @@ def index():
     if form.login.is_submitted() and form.login.submit.data:
         user = database.query_user(form.login.username.data)
         if user == None:
-            flash('Sorry, this user does not exist!')
+            flash('Wrong password or username')          #Istedenfor å kunne sjekke om brukeren allerede finnes
         elif check_password_hash(user['password'], form.login.password.data):
             f_user = User()
             f_user.id = user['id']
             flask_login.login_user(f_user)
             return redirect(url_for('stream'))
         else:
-            flash('Sorry, wrong password!')
-        
-    elif form.register.is_submitted() and form.register.submit.data:
-        database.submit_user(form.register.username.data, form.register.first_name.data,
-         form.register.last_name.data, generate_password_hash(form.register.password.data))
+            flash('Wrong password or username!')
+    #elif form.register.is_submitted() and form.register.submit.data:
+    elif form.register.validate_on_submit():
+        if form.register.username_check(form.register.username.data):
+            if form.register.pwdcheck(form.register.password.data):
+                database.submit_user(form.register.username.data, form.register.first_name.data,
+                 form.register.last_name.data, generate_password_hash(form.register.password.data))
+                return redirect(url_for('index'))
+            elif not form.register.pwdcheck(form.register.password.data):
+                flash("Password must contain an uppercase letter and a number!")
+        elif not form.register.username_check(form.register.username.data):
+            flash("Username already taken!")
         return redirect(url_for('index'))
+
     return render_template('index.html', title='Welcome', form=form)
 
 
@@ -49,15 +67,19 @@ def stream():
     form = PostForm()
     user_id = flask_login.current_user.id
     user = database.query_user_id(user_id)
-    if form.is_submitted():
+    if form.is_submitted() and allowed_file(form.image.data.filename): #Sjekker korrekt filtype
         if form.image.data:
             path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
             form.image.data.save(path)
 
+
         database.submit_post(user['id'], form.content.data, form.image.data.filename, datetime.now())
         return redirect(url_for('stream'))
+    elif form.is_submitted() and not allowed_file(form.image.data.filename): #Gir beskjed dersom fila ikke er av riktig type
+        flash("You can only upload images!")
     posts = database.query_posts(user['id'])
     return render_template('stream.html', title='Stream', username=user['username'], form=form, posts=posts)
+    
 
 # comment page for a given post and user.
 @app.route('/comments/<username>/<int:p_id>', methods=['GET', 'POST'])
