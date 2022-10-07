@@ -100,15 +100,16 @@ def profile(username):
     user = database.query_user_id(user_id)
     friend = database.query_friend(user_id, username)
     form = ProfileForm()
-    if username == friend['username']: # brukes til å nekte brukeren i å se andre sine sider 
+    if friend and username == friend['username'] : # brukes til å nekte brukeren i å se andre sine sider 
+        user = database.query_user(friend['username'])
         return render_template('profile.html', title='profile', username=username, user=user, form=form)
-    #   return redirect(url_for('profile', username=user['username']))  # sender bruker til riktig side
-    if form.is_submitted():
-        database.update_profile(form.education.data, form.employment.data, form.music.data, form.movie.data, form.nationality.data, form.birthday.data, username)
-        return redirect(url_for('profile', username=username))
-    
-    user = database.query_user(username)
-    return render_template('profile.html', title='profile', username=username, user=user, form=form)
+    elif username == user['username']:
+        if form.is_submitted():
+            database.update_profile(form.education.data, form.employment.data, form.music.data, form.movie.data, form.nationality.data, form.birthday.data, username)
+            return redirect(url_for('profile', username=username))
+        return render_template('profile.html', title='profile', username=username, user=user, form=form)
+    else:
+        abort(403)
 
 @app.route('/logout', methods=['GET', 'POST'])
 def logout():
