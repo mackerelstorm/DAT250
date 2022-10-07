@@ -6,7 +6,6 @@ def query_user(username):
     cur = db.execute(sql, [username])
     rv = cur.fetchone()
     cur.close()
-    db.commit()
     return rv
 
 def query_user_id(uid):
@@ -15,7 +14,6 @@ def query_user_id(uid):
     cur = db.execute(sql, [uid])
     rv = cur.fetchone()
     cur.close()
-    db.commit()
     return rv
 
 def query_friends(u_id):
@@ -24,7 +22,6 @@ def query_friends(u_id):
     cur = db.execute(sql, (u_id, u_id))
     rv = cur.fetchall()
     cur.close()
-    db.commit()
     return rv
 
 def query_friend(u_id, username):
@@ -33,7 +30,6 @@ def query_friend(u_id, username):
     cur = db.execute(sql, (u_id, u_id, username))
     rv = cur.fetchone()
     cur.close()
-    db.commit()
     return rv
 
 def query_post(p_id):
@@ -42,7 +38,6 @@ def query_post(p_id):
     cur = db.execute(sql, [p_id])
     rv = cur.fetchone()
     cur.close()
-    db.commit()
     return rv
 
 def query_posts(u_id):
@@ -51,7 +46,6 @@ def query_posts(u_id):
     cur = db.execute(sql, (u_id, u_id, u_id))
     rv = cur.fetchall()
     cur.close()
-    db.commit()
     return rv
 
 def query_comments(p_id):
@@ -60,7 +54,6 @@ def query_comments(p_id):
     cur = db.execute(sql, [p_id])
     rv = cur.fetchall()
     cur.close()
-    db.commit()
     return rv
 
 
