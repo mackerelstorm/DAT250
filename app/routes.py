@@ -44,7 +44,6 @@ def index():
             return redirect(url_for('stream'))
         else:
             flash('Wrong password or username!')
-    #elif form.register.is_submitted() and form.register.submit.data:
     elif form.register.validate_on_submit():
         if form.register.username_check(form.register.username.data):
             if form.register.pwdcheck(form.register.password.data):
