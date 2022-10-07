@@ -1,33 +1,71 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, SubmitField, FormField, TextAreaField, FileField
+from flask import session
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, FormField, TextAreaField, FileField, Form
 from wtforms.fields.html5 import DateField
+from wtforms.validators import InputRequired, EqualTo, ValidationError, Length, Regexp #Importert funksjoner for validering
+from flask_wtf.file import FileField, FileAllowed, FileRequired
+from app import query_db
 
 # defines all forms in the application, these will be instantiated by the template,
 # and the routes.py will read the values of the fields
 # TODO: Add validation, maybe use wtforms.validators??
 # TODO: There was some important security feature that wtforms provides, but I don't remember what; implement it
 
+
 class LoginForm(FlaskForm):
+    class Meta:
+        csrf = False
     username = StringField('Username', render_kw={'placeholder': 'Username'})
     password = PasswordField('Password', render_kw={'placeholder': 'Password'})
     remember_me = BooleanField('Remember me') # TODO: It would be nice to have this feature implemented, probably by using cookies
     submit = SubmitField('Sign In')
 
 class RegisterForm(FlaskForm):
-    first_name = StringField('First Name', render_kw={'placeholder': 'First Name'})
-    last_name = StringField('Last Name', render_kw={'placeholder': 'Last Name'})
-    username = StringField('Username', render_kw={'placeholder': 'Username'})
-    password = PasswordField('Password', render_kw={'placeholder': 'Password'})
+    class Meta:
+        csrf = False
+    first_name = StringField('First Name',validators=[InputRequired(message='Need to enter a first name')], render_kw={'placeholder': 'First Name'})
+    last_name = StringField('Last Name',validators=[InputRequired(message='Need to enter a last name')], render_kw={'placeholder': 'Last Name'})
+    username = StringField('Username',validators=[InputRequired(message='Need to enter a username')], render_kw={'placeholder': 'Username'})
+    password = PasswordField('Password',validators=[InputRequired(),Length(min=8, max=40,message='Password must be at least 8 characters long!'),EqualTo('confirm_password', message='Passwords must match')], render_kw={'placeholder': 'Password'})
     confirm_password = PasswordField('Confirm Password', render_kw={'placeholder': 'Confirm Password'})
     submit = SubmitField('Sign Up')
 
+
+    def username_check(self, username):
+        bruker = query_db('SELECT * FROM Users WHERE username="{}";'.format(username), one=True)
+        if bruker == None:
+            return True
+        else:
+            return False
+
+    def pwdcheck(self, s): #Lagte passwordchecker for å sjekke om det er store og små bosktaver pluss tall.
+        checker = 0
+        if any('a' <= c <= 'z' for c in s):
+            checker += 1
+        if any('A' <= c <= 'Z' for c in s):
+            checker += 1
+        if any(c.isdigit() for c in s):
+            checker += 1
+
+        if checker == 3:
+            return True
+        elif checker < 3:
+            return False
+        
+        
+
+
 class IndexForm(FlaskForm):
+    class Meta:
+        csrf = False
     login = FormField(LoginForm)
     register = FormField(RegisterForm)
 
 class PostForm(FlaskForm):
+    class Meta:
+        csrf = False
     content = TextAreaField('New Post', render_kw={'placeholder': 'What are you thinking about?'})
-    image = FileField('Image')
+    image = FileField('Image') 
     submit = SubmitField('Post')
 
 class CommentsForm(FlaskForm):

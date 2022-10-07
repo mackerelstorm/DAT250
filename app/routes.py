@@ -4,7 +4,14 @@ from app.forms import IndexForm, PostForm, FriendsForm, ProfileForm, CommentsFor
 from datetime import datetime
 import os
 
+
+
 # this file contains all the different routes, and the logic for communicating with the database
+
+#Funksjon for å sjekke om filnavnet inneholder korrekte extensions fra configs ALLOWED_EXTENSIONS
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 # home page/login/registration
 @app.route('/', methods=['GET', 'POST'])
@@ -15,16 +22,24 @@ def index():
     if form.login.is_submitted() and form.login.submit.data:
         user = query_db('SELECT * FROM Users WHERE username="{}";'.format(form.login.username.data), one=True)
         if user == None:
-            flash('Sorry, this user does not exist!')
+            flash('Wrong password or username')          #Istedenfor å kunne sjekke om brukeren allerede finnes
         elif user['password'] == form.login.password.data:
             return redirect(url_for('stream', username=form.login.username.data))
         else:
-            flash('Sorry, wrong password!')
+            flash('Wrong password or username!')
 
-    elif form.register.is_submitted() and form.register.submit.data:
-        query_db('INSERT INTO Users (username, first_name, last_name, password) VALUES("{}", "{}", "{}", "{}");'.format(form.register.username.data, form.register.first_name.data,
-         form.register.last_name.data, form.register.password.data))
-        return redirect(url_for('index'))
+    #elif form.register.is_submitted() and form.register.submit.data:
+    elif form.register.validate_on_submit():
+        if form.register.username_check(form.register.username.data):
+            if form.register.pwdcheck(form.register.password.data):
+                query_db('INSERT INTO Users (username, first_name, last_name, password) VALUES("{}", "{}", "{}", "{}");'.format(form.register.username.data, form.register.first_name.data,
+                form.register.last_name.data, form.register.password.data))
+                return redirect(url_for('index'))
+            elif not form.register.pwdcheck(form.register.password.data):
+                flash("Password must contain an uppercase letter and a number!")
+        elif not form.register.username_check(form.register.username.data):
+            flash("Username already taken!")
+
     return render_template('index.html', title='Welcome', form=form)
 
 
@@ -33,7 +48,7 @@ def index():
 def stream(username):
     form = PostForm()
     user = query_db('SELECT * FROM Users WHERE username="{}";'.format(username), one=True)
-    if form.is_submitted():
+    if form.is_submitted() and allowed_file(form.image.data.filename): #Sjekker korrekt filtype
         if form.image.data:
             path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
             form.image.data.save(path)
@@ -41,7 +56,9 @@ def stream(username):
 
         query_db('INSERT INTO Posts (u_id, content, image, creation_time) VALUES({}, "{}", "{}", \'{}\');'.format(user['id'], form.content.data, form.image.data.filename, datetime.now()))
         return redirect(url_for('stream', username=username))
-
+    elif form.is_submitted() and not allowed_file(form.image.data.filename): #Gir beskjed dersom fila ikke er av riktig type
+        flash("You can only upload images!")
+    
     posts = query_db('SELECT p.*, u.*, (SELECT COUNT(*) FROM Comments WHERE p_id=p.id) AS cc FROM Posts AS p JOIN Users AS u ON u.id=p.u_id WHERE p.u_id IN (SELECT u_id FROM Friends WHERE f_id={0}) OR p.u_id IN (SELECT f_id FROM Friends WHERE u_id={0}) OR p.u_id={0} ORDER BY p.creation_time DESC;'.format(user['id']))
     return render_template('stream.html', title='Stream', username=username, form=form, posts=posts)
 

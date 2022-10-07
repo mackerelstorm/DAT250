@@ -32,12 +32,14 @@
                 </div>
                 <div class="card-body">
                     <h5 class="card-title">Create a new profile</h5>
-                    <form action="", method="POST" novalidate>
+                    <form action="", method="POST">
+                       
                         {{ wtf.form_field(form.register.first_name) }}
                         {{ wtf.form_field(form.register.last_name) }}
-                        {{ wtf.form_field(form.register.username) }}
+                        {{ wtf.form_field(form.register.username) }} 
                         {{ wtf.form_field(form.register.password) }}
                         {{ wtf.form_field(form.register.confirm_password) }}
+                        
                         {{ wtf.form_field(form.register.submit, class="btn btn-primary") }}
                     </form>
                 </div>
