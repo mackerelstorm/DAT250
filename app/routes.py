@@ -39,7 +39,7 @@ def index():
 def stream():
     form = PostForm()
     user_id = flask_login.current_user.id
-    user = database.query_user(user_id)
+    user = database.query_user_id(user_id)
     if form.is_submitted():
         if form.image.data:
             path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
@@ -56,12 +56,11 @@ def stream():
 def comments(username, p_id):
     form = CommentsForm()
     user_id = flask_login.current_user.id
-    user = database.query_user(user_id)
+    user = database.query_user_id(user_id)
     if username != user['username']: # brukes til å nekte brukeren i å endre url 
         return abort(403)
     if form.is_submitted():
-        user = database.query_user(username)
-        database.submit_comment(p_id, user['id'], form.comment.data, datetime.now())
+        database.submit_comment(p_id, user_id, form.comment.data, datetime.now())
     post = database.query_post(p_id)
     all_comments = database.query_comments(p_id)
     return render_template('comments.html', title='Comments', username=username, form=form, post=post, comments=all_comments)
@@ -72,7 +71,7 @@ def comments(username, p_id):
 def friends(username):
     form = FriendsForm()
     user_id = flask_login.current_user.id
-    user = database.query_user(username)
+    user = database.query_user_id(user_id)
     if username != user['username']: 
         return abort(403)
     if form.is_submitted():
@@ -89,11 +88,12 @@ def friends(username):
 @flask_login.login_required
 def profile(username):
     user_id = flask_login.current_user.id
-    user = database.query_user(user_id)
-    if username != user['username']: # brukes til å nekte brukeren i å se andre sine sider 
-        return abort(403)
-    #   return redirect(url_for('profile', username=user['username']))  # sender bruker til riktig side
+    user = database.query_user_id(user_id)
+    friend = database.query_friend(user_id, username)
     form = ProfileForm()
+    if username == friend['username']: # brukes til å nekte brukeren i å se andre sine sider 
+        return render_template('profile.html', title='profile', username=username, user=user, form=form)
+    #   return redirect(url_for('profile', username=user['username']))  # sender bruker til riktig side
     if form.is_submitted():
         database.update_profile(form.education.data, form.employment.data, form.music.data, form.movie.data, form.nationality.data, form.birthday.data, username)
         return redirect(url_for('profile', username=username))

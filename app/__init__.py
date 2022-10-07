@@ -19,12 +19,12 @@ class User(UserMixin):
 
 @login.user_loader 
 def load(user_id):
-    thisuser = database.query_user(user_id)
+    thisuser = database.query_user_id(user_id)
     if thisuser != None:
         user = User()
         user.id = user_id
         return user
-    return "User not found"
+    return None
     
 
 # get an instance of the db
@@ -61,12 +61,30 @@ class Database():
         cur.close()
         db.commit()
         return rv
+
+    def query_user_id(self,uid):
+        db = get_db()
+        sql = 'SELECT * FROM Users WHERE id=?;'
+        cur = db.execute(sql, [uid])
+        rv = cur.fetchone()
+        cur.close()
+        db.commit()
+        return rv
     
     def query_friends(self, u_id):
         db = get_db()
         sql = 'SELECT * FROM Friends AS f JOIN Users as u ON f.f_id=u.id WHERE f.u_id=? AND f.f_id!=? ;'
         cur = db.execute(sql, (u_id, u_id))
         rv = cur.fetchall()
+        cur.close()
+        db.commit()
+        return rv
+    
+    def query_friend(self, u_id, username):
+        db = get_db()
+        sql = 'SELECT * FROM Friends AS f JOIN Users as u ON f.f_id=u.id WHERE f.u_id=? AND f.f_id!=? AND username=? ;'
+        cur = db.execute(sql, (u_id, u_id, username))
+        rv = cur.fetchone()
         cur.close()
         db.commit()
         return rv
